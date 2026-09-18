@@ -563,6 +563,8 @@ result_df = result_df.sort_values(
     ascending=[True, False, False],
 ).drop(columns="_status_order")
 
+result_df = result_df.head(10)
+
 strong_momentum = result_df[
     result_df["Status"] == "BELI KUAT - MOMENTUM"
 ]
