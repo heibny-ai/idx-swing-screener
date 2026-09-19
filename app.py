@@ -36,6 +36,19 @@ def download_price_data(ticker, period):
     return data.dropna(subset=["Close", "High", "Low", "Volume"]).copy()
 
 
+def download_price_data_with_retry(ticker, period, max_retries=2):
+    """PATCH 6: retry sederhana untuk mengatasi throttle Yahoo Finance."""
+    for attempt in range(max_retries + 1):
+        try:
+            data = download_price_data(ticker, period)
+            if not data.empty:
+                return data
+        except Exception:
+            pass
+        time.sleep(1.0 * (attempt + 1))
+    return pd.DataFrame()
+
+
 def add_indicators(data):
     df = data.copy()
     close = df["Close"]
@@ -64,7 +77,11 @@ def add_indicators(data):
     ).average_true_range()
 
     df["volume_sma20"] = volume.rolling(20).mean()
-    df["volume_ratio"] = volume / df["volume_sma20"]
+
+    with np.errstate(divide="ignore", invalid="ignore"):
+        df["volume_ratio"] = volume / df["volume_sma20"]
+    df["volume_ratio"] = df["volume_ratio"].replace([np.inf, -np.inf], np.nan)
+
     df["high20_previous"] = high.rolling(20).max().shift(1)
     df["low10"] = low.rolling(10).min()
     df["high20"] = high.rolling(20).max()
@@ -75,11 +92,27 @@ def add_indicators(data):
     return df
 
 
+def calc_momentum_risk_reward(momentum_entry, momentum_stop, momentum_target_5):
+    """PATCH 2: guard ZeroDivisionError saat ATR=0 membuat entry == stop."""
+    risk_denominator = momentum_entry - momentum_stop
+    if risk_denominator > 0:
+        momentum_risk = risk_denominator / momentum_entry * 100
+        momentum_rr = (momentum_target_5 - momentum_entry) / risk_denominator
+    else:
+        momentum_risk = np.nan
+        momentum_rr = 0
+    return momentum_risk, momentum_rr
+
+
 def analyze_stock(ticker, data, min_value_traded):
     if len(data) < 70:
         return None
 
     df = add_indicators(data)
+
+    if len(df) < 2:
+        return None
+
     row = df.iloc[-1]
     prev = df.iloc[-2]
 
@@ -106,7 +139,7 @@ def analyze_stock(ticker, data, min_value_traded):
 
     close = float(row["Close"])
     atr_value = float(row["atr14"])
-    atr_percent = atr_value / close * 100
+    atr_percent = atr_value / close * 100 if close > 0 else np.nan
     liquid = row["value_sma20"] >= min_value_traded
 
     # =========================
@@ -117,28 +150,19 @@ def analyze_stock(ticker, data, min_value_traded):
     momentum_target_5 = momentum_entry * 1.05
     momentum_target_10 = momentum_entry * 1.10
 
-    momentum_risk = (
-        (momentum_entry - momentum_stop)
-        / momentum_entry
-        * 100
+    momentum_risk, momentum_rr = calc_momentum_risk_reward(
+        momentum_entry, momentum_stop, momentum_target_5
     )
 
-    momentum_rr = (
-        (momentum_target_5 - momentum_entry)
-        / (momentum_entry - momentum_stop)
-    )
-
-    # Filter tren utama: EMA 20 dan EMA 50.
     trend_bullish = close > row["ema20"] > row["ema50"]
 
-    # Konfirmasi momentum cepat: EMA 10 berada di atas EMA 20.
     ema10_momentum = (
         close > row["ema10"]
         and row["ema10"] > row["ema20"]
     )
 
     breakout_20d = close > row["high20_previous"]
-    volume_strong = row["volume_ratio"] >= 1.8
+    volume_strong = pd.notna(row["volume_ratio"]) and row["volume_ratio"] >= 1.8
 
     rsi_healthy = 55 <= row["rsi14"] <= 72
     macd_bullish = (
@@ -146,16 +170,13 @@ def analyze_stock(ticker, data, min_value_traded):
         and row["macd_hist"] > 0
     )
 
-    # Hindari membeli ketika harga sudah terlalu tinggi.
     not_extended = (
         row["return_5d"] <= 10
         and close <= row["ema10"] * 1.06
     )
 
-    # Hanya saham dengan volatilitas rendah hingga sedang.
-    atr_suitable = 1.0 <= atr_percent <= 5.0
+    atr_suitable = pd.notna(atr_percent) and 1.0 <= atr_percent <= 5.0
 
-    # Total bobot Momentum: 100.
     momentum_score = 0
     momentum_score += 20 if trend_bullish else 0
     momentum_score += 15 if ema10_momentum else 0
@@ -166,10 +187,10 @@ def analyze_stock(ticker, data, min_value_traded):
     momentum_score += 5 if atr_suitable else 0
     momentum_score += 5 if not_extended else 0
 
-    # Batas risiko maksimum 5% untuk Momentum.
     momentum_hard_fail = (
         not liquid
         or not trend_bullish
+        or not np.isfinite(momentum_risk)
         or momentum_risk > 5
     )
 
@@ -231,11 +252,10 @@ def analyze_stock(ticker, data, min_value_traded):
         and close > float(prev["Close"])
     )
 
-    rebound_volume = row["volume_ratio"] >= 1.3
+    rebound_volume = pd.notna(row["volume_ratio"]) and row["volume_ratio"] >= 1.3
     rebound_macd = row["macd_hist"] > float(prev["macd_hist"])
-    rebound_atr_ok = 1.0 <= atr_percent <= 6.0
+    rebound_atr_ok = pd.notna(atr_percent) and 1.0 <= atr_percent <= 6.0
 
-    # Total bobot Rebound: 100.
     rebound_score = 0
     rebound_score += 20 if was_down else 0
     rebound_score += 20 if rsi_recovering else 0
@@ -246,7 +266,6 @@ def analyze_stock(ticker, data, min_value_traded):
     rebound_score += 5 if liquid else 0
     rebound_score += 5 if rebound_atr_ok else 0
 
-    # Batas risiko maksimum 6% untuk Rebound.
     rebound_hard_fail = (
         not liquid
         or not np.isfinite(rebound_risk)
@@ -371,7 +390,7 @@ def analyze_stock(ticker, data, min_value_traded):
         "Target +10%": round(target_10),
         "R:R Target 5%": round(reward_risk, 2),
         "RSI 14": round(float(row["rsi14"]), 1),
-        "Volume Ratio": round(float(row["volume_ratio"]), 2),
+        "Volume Ratio": round(float(row["volume_ratio"]), 2) if pd.notna(row["volume_ratio"]) else np.nan,
         "Turun dari High 20H %": round(float(row["drawdown_20d"]), 2),
         "Nilai Transaksi 20H": round(float(row["value_sma20"])),
         "Alasan": "; ".join(reasons),
@@ -494,7 +513,7 @@ progress_bar = st.progress(
 
 for index, ticker in enumerate(tickers, start=1):
     try:
-        price_data = download_price_data(ticker, period)
+        price_data = download_price_data_with_retry(ticker, period)
         result = analyze_stock(
             ticker,
             price_data,
@@ -514,7 +533,7 @@ for index, ticker in enumerate(tickers, start=1):
         text=f"Memproses {index}/{len(tickers)}: {ticker}",
     )
 
-    time.sleep(0.03)
+    time.sleep(0.15)
 
 progress_bar.empty()
 
