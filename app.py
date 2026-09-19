@@ -5,7 +5,6 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 import yfinance as yf
-import plotly.graph_objects as go
 from ta.momentum import RSIIndicator
 from ta.trend import EMAIndicator, MACD, ADXIndicator
 from ta.volatility import AverageTrueRange
@@ -229,27 +228,13 @@ def analyze_stock(
     prev = df.iloc[-2]
 
     required = [
-        "ema5",
-        "ema10",
-        "ema20",
-        "ema50",
-        "rsi14",
-        "rsi14_prev",
-        "macd",
-        "macd_signal",
-        "macd_hist",
-        "adx14",
-        "adx_pos",
-        "adx_neg",
-        "atr14",
-        "volume_ratio",
-        "value_sma20",
-        "value_ratio",
-        "high20_previous",
-        "high60_previous",
-        "low10",
-        "drawdown_20d",
-        "return_5d",
+        "ema5", "ema10", "ema20", "ema50",
+        "rsi14", "rsi14_prev",
+        "macd", "macd_signal", "macd_hist",
+        "adx14", "adx_pos", "adx_neg",
+        "atr14", "volume_ratio", "value_sma20", "value_ratio",
+        "high20_previous", "high60_previous", "low10",
+        "drawdown_20d", "return_5d",
     ]
 
     if row[required].isna().any():
@@ -271,70 +256,34 @@ def analyze_stock(
     resistance_60 = float(row["high60_previous"])
 
     if resistance_60 > close:
-        room_to_resistance = (
-            (resistance_60 - close) / close * 100
-        )
+        room_to_resistance = (resistance_60 - close) / close * 100
     else:
         room_to_resistance = 0.0
 
     room_for_target_5 = room_to_resistance >= 5.0
 
     momentum_entry = close
-    momentum_stop = max(
-        0.0,
-        momentum_entry - (1.5 * atr_value),
-    )
-
+    momentum_stop = max(0.0, momentum_entry - (1.5 * atr_value))
     momentum_target_5 = momentum_entry * 1.05
     momentum_target_10 = momentum_entry * 1.10
 
     momentum_risk, momentum_rr = calc_risk_reward(
-        momentum_entry,
-        momentum_stop,
-        momentum_target_5,
+        momentum_entry, momentum_stop, momentum_target_5,
     )
 
-    (
-        momentum_target_1r,
-        momentum_target_2r,
-        momentum_target_3r,
-    ) = calc_rr_targets(
-        momentum_entry,
-        momentum_stop,
+    (momentum_target_1r, momentum_target_2r, momentum_target_3r) = calc_rr_targets(
+        momentum_entry, momentum_stop,
     )
 
     trend_bullish = close > row["ema20"] > row["ema50"]
-
-    ema10_momentum = (
-        close > row["ema10"]
-        and row["ema10"] > row["ema20"]
-    )
-
+    ema10_momentum = close > row["ema10"] and row["ema10"] > row["ema20"]
     breakout_20d = close > row["high20_previous"]
-
     volume_strong = volume_ratio >= 1.80
-
     rsi_healthy = 55 <= row["rsi14"] <= 72
-
-    macd_bullish = (
-        row["macd"] > row["macd_signal"]
-        and row["macd_hist"] > 0
-    )
-
-    adx_trending = (
-        row["adx14"] >= 20
-        and row["adx_pos"] > row["adx_neg"]
-    )
-
-    not_extended = (
-        row["return_5d"] <= 10
-        and close <= row["ema10"] * 1.06
-    )
-
-    atr_suitable = (
-        pd.notna(atr_percent)
-        and 1.0 <= atr_percent <= atr_max_percent
-    )
+    macd_bullish = row["macd"] > row["macd_signal"] and row["macd_hist"] > 0
+    adx_trending = row["adx14"] >= 20 and row["adx_pos"] > row["adx_neg"]
+    not_extended = row["return_5d"] <= 10 and close <= row["ema10"] * 1.06
+    atr_suitable = pd.notna(atr_percent) and 1.0 <= atr_percent <= atr_max_percent
 
     momentum_score = 0
     momentum_score += 20 if trend_bullish else 0
@@ -350,87 +299,41 @@ def analyze_stock(
     momentum_score += 5 if room_for_target_5 else 0
 
     momentum_hard_fail = (
-        not price_valid
-        or not liquid
-        or not trend_bullish
-        or not np.isfinite(momentum_risk)
-        or momentum_risk > 5
+        not price_valid or not liquid or not trend_bullish
+        or not np.isfinite(momentum_risk) or momentum_risk > 5
     )
 
     momentum_strong = (
-        not momentum_hard_fail
-        and momentum_score >= 80
-        and ema10_momentum
-        and breakout_20d
-        and volume_strong
-        and macd_bullish
-        and not_extended
-        and momentum_rr >= 1.50
+        not momentum_hard_fail and momentum_score >= 80
+        and ema10_momentum and breakout_20d and volume_strong
+        and macd_bullish and not_extended and momentum_rr >= 1.50
     )
 
     rebound_entry = close
-
-    rebound_stop = max(
-        float(row["low10"]),
-        rebound_entry - (1.5 * atr_value),
-    )
-
-    rebound_stop = min(
-        rebound_stop,
-        rebound_entry - 0.01,
-    )
-
+    rebound_stop = max(float(row["low10"]), rebound_entry - (1.5 * atr_value))
+    rebound_stop = min(rebound_stop, rebound_entry - 0.01)
     rebound_stop = max(0.0, rebound_stop)
-
     rebound_target_5 = rebound_entry * 1.05
     rebound_target_10 = rebound_entry * 1.10
 
     rebound_risk, rebound_rr = calc_risk_reward(
-        rebound_entry,
-        rebound_stop,
-        rebound_target_5,
+        rebound_entry, rebound_stop, rebound_target_5,
     )
 
-    (
-        rebound_target_1r,
-        rebound_target_2r,
-        rebound_target_3r,
-    ) = calc_rr_targets(
-        rebound_entry,
-        rebound_stop,
+    (rebound_target_1r, rebound_target_2r, rebound_target_3r) = calc_rr_targets(
+        rebound_entry, rebound_stop,
     )
 
-    was_down = (
-        row["drawdown_20d"] <= -8
-        or row["return_5d"] <= -5
-    )
-
+    was_down = row["drawdown_20d"] <= -8 or row["return_5d"] <= -5
     rsi_recovering = (
-        row["rsi14_prev"] < 35
-        and row["rsi14"] >= 35
+        row["rsi14_prev"] < 35 and row["rsi14"] >= 35
         and row["rsi14"] > row["rsi14_prev"]
     )
-
-    price_recovering = (
-        close > row["ema5"]
-        and row["ema5"] > row["ema10"]
-    )
-
-    green_candle = (
-        close > float(row["Open"])
-        and close > float(prev["Close"])
-    )
-
+    price_recovering = close > row["ema5"] and row["ema5"] > row["ema10"]
+    green_candle = close > float(row["Open"]) and close > float(prev["Close"])
     rebound_volume = volume_ratio >= 1.30
-
-    rebound_macd = (
-        row["macd_hist"] > float(prev["macd_hist"])
-    )
-
-    rebound_atr_ok = (
-        pd.notna(atr_percent)
-        and 1.0 <= atr_percent <= atr_max_percent
-    )
+    rebound_macd = row["macd_hist"] > float(prev["macd_hist"])
+    rebound_atr_ok = pd.notna(atr_percent) and 1.0 <= atr_percent <= atr_max_percent
 
     rebound_score = 0
     rebound_score += 20 if was_down else 0
@@ -445,27 +348,20 @@ def analyze_stock(
     rebound_score += 5 if room_for_target_5 else 0
 
     rebound_hard_fail = (
-        not price_valid
-        or not liquid
-        or not np.isfinite(rebound_risk)
-        or rebound_risk > 6
+        not price_valid or not liquid
+        or not np.isfinite(rebound_risk) or rebound_risk > 6
     )
 
     rebound_strong = (
-        not rebound_hard_fail
-        and rebound_score >= 75
-        and was_down
-        and rsi_recovering
-        and price_recovering
-        and rebound_volume
-        and rebound_rr >= 1.20
+        not rebound_hard_fail and rebound_score >= 75
+        and was_down and rsi_recovering and price_recovering
+        and rebound_volume and rebound_rr >= 1.20
     )
 
     if momentum_strong:
         status = "BELI KUAT - MOMENTUM"
         strategy = "Momentum / Breakout"
         score = momentum_score
-
         entry = momentum_entry
         stop_loss = momentum_stop
         target_5 = momentum_target_5
@@ -475,7 +371,6 @@ def analyze_stock(
         target_3r = momentum_target_3r
         risk_percent = momentum_risk
         reward_risk = momentum_rr
-
         reasons = [
             "tren bullish EMA 20 > EMA 50",
             "EMA 10 di atas EMA 20",
@@ -489,7 +384,6 @@ def analyze_stock(
         status = "BELI KUAT - REBOUND"
         strategy = "Rebound dari bawah"
         score = rebound_score
-
         entry = rebound_entry
         stop_loss = rebound_stop
         target_5 = rebound_target_5
@@ -499,7 +393,6 @@ def analyze_stock(
         target_3r = rebound_target_3r
         risk_percent = rebound_risk
         reward_risk = rebound_rr
-
         reasons = [
             "harga sebelumnya terkoreksi",
             "RSI mulai pulih",
@@ -513,7 +406,6 @@ def analyze_stock(
         status = "BELI"
         strategy = "Momentum belum lengkap"
         score = momentum_score
-
         entry = momentum_entry
         stop_loss = momentum_stop
         target_5 = momentum_target_5
@@ -523,7 +415,6 @@ def analyze_stock(
         target_3r = momentum_target_3r
         risk_percent = momentum_risk
         reward_risk = momentum_rr
-
         reasons = [
             "sebagian sinyal momentum positif",
             "belum memenuhi seluruh syarat beli kuat",
@@ -533,7 +424,6 @@ def analyze_stock(
         status = "BELI"
         strategy = "Rebound belum lengkap"
         score = rebound_score
-
         entry = rebound_entry
         stop_loss = rebound_stop
         target_5 = rebound_target_5
@@ -543,7 +433,6 @@ def analyze_stock(
         target_3r = rebound_target_3r
         risk_percent = rebound_risk
         reward_risk = rebound_rr
-
         reasons = [
             "ada tanda pantulan",
             "belum memenuhi seluruh syarat rebound kuat",
@@ -555,7 +444,6 @@ def analyze_stock(
         if momentum_score >= rebound_score:
             strategy = "Momentum tidak valid"
             score = momentum_score
-
             entry = momentum_entry
             stop_loss = momentum_stop
             target_5 = momentum_target_5
@@ -565,86 +453,42 @@ def analyze_stock(
             target_3r = momentum_target_3r
             risk_percent = momentum_risk
             reward_risk = momentum_rr
-
             reasons = []
 
             if not price_valid:
-                reasons.append(
-                    f"harga Rp{close:.0f} di bawah minimum"
-                )
-
+                reasons.append(f"harga Rp{close:.0f} di bawah minimum")
             if not liquid:
-                reasons.append(
-                    "nilai transaksi rata-rata 20H terlalu kecil"
-                )
-
+                reasons.append("nilai transaksi rata-rata 20H terlalu kecil")
             if not trend_bullish:
-                reasons.append(
-                    "trend EMA 20 dan EMA 50 belum bullish"
-                )
-
+                reasons.append("trend EMA 20 dan EMA 50 belum bullish")
             if not ema10_momentum:
-                reasons.append(
-                    "EMA 10 belum berada di atas EMA 20"
-                )
-
+                reasons.append("EMA 10 belum berada di atas EMA 20")
             if not breakout_20d:
-                reasons.append(
-                    "belum breakout high 20 hari"
-                )
-
+                reasons.append("belum breakout high 20 hari")
             if not volume_strong:
-                reasons.append(
-                    f"volume lemah {volume_ratio:.2f}x "
-                    "(perlu minimal 1.80x)"
-                )
-
+                reasons.append(f"volume lemah {volume_ratio:.2f}x (perlu minimal 1.80x)")
             if not rsi_healthy:
-                reasons.append(
-                    f"RSI belum ideal {row['rsi14']:.1f}"
-                )
-
+                reasons.append(f"RSI belum ideal {row['rsi14']:.1f}")
             if not macd_bullish:
                 reasons.append("MACD belum bullish")
-
             if not adx_trending:
-                reasons.append(
-                    f"ADX belum mendukung tren {row['adx14']:.1f}"
-                )
-
+                reasons.append(f"ADX belum mendukung tren {row['adx14']:.1f}")
             if not transaction_active:
-                reasons.append(
-                    f"transaksi hari ini lemah {value_ratio:.2f}x"
-                )
-
+                reasons.append(f"transaksi hari ini lemah {value_ratio:.2f}x")
             if not atr_suitable:
-                reasons.append(
-                    f"ATR {atr_percent:.2f}% di luar batas"
-                )
-
+                reasons.append(f"ATR {atr_percent:.2f}% di luar batas")
             if not room_for_target_5:
-                reasons.append(
-                    f"ruang ke resistance hanya "
-                    f"{room_to_resistance:.2f}%"
-                )
-
+                reasons.append(f"ruang ke resistance hanya {room_to_resistance:.2f}%")
             if not np.isfinite(momentum_risk):
                 reasons.append("stop loss tidak valid")
-
             elif momentum_risk > 5:
-                reasons.append(
-                    f"risiko {momentum_risk:.2f}% terlalu besar"
-                )
-
+                reasons.append(f"risiko {momentum_risk:.2f}% terlalu besar")
             if momentum_rr < 1.5:
-                reasons.append(
-                    f"R:R target +5% rendah {momentum_rr:.2f}"
-                )
+                reasons.append(f"R:R target +5% rendah {momentum_rr:.2f}")
 
         else:
             strategy = "Rebound tidak valid"
             score = rebound_score
-
             entry = rebound_entry
             stop_loss = rebound_stop
             target_5 = rebound_target_5
@@ -654,86 +498,42 @@ def analyze_stock(
             target_3r = rebound_target_3r
             risk_percent = rebound_risk
             reward_risk = rebound_rr
-
             reasons = []
 
             if not price_valid:
-                reasons.append(
-                    f"harga Rp{close:.0f} di bawah minimum"
-                )
-
+                reasons.append(f"harga Rp{close:.0f} di bawah minimum")
             if not liquid:
-                reasons.append(
-                    "nilai transaksi rata-rata 20H terlalu kecil"
-                )
-
+                reasons.append("nilai transaksi rata-rata 20H terlalu kecil")
             if not was_down:
-                reasons.append(
-                    "belum ada koreksi harga yang cukup"
-                )
-
+                reasons.append("belum ada koreksi harga yang cukup")
             if not rsi_recovering:
-                reasons.append(
-                    "RSI belum pulih dari area rendah"
-                )
-
+                reasons.append("RSI belum pulih dari area rendah")
             if not price_recovering:
-                reasons.append(
-                    "harga dan EMA belum mengonfirmasi rebound"
-                )
-
+                reasons.append("harga dan EMA belum mengonfirmasi rebound")
             if not green_candle:
-                reasons.append(
-                    "belum ada candle hijau konfirmasi"
-                )
-
+                reasons.append("belum ada candle hijau konfirmasi")
             if not rebound_volume:
-                reasons.append(
-                    f"volume rebound lemah {volume_ratio:.2f}x "
-                    "(perlu minimal 1.30x)"
-                )
-
+                reasons.append(f"volume rebound lemah {volume_ratio:.2f}x (perlu minimal 1.30x)")
             if not rebound_macd:
-                reasons.append(
-                    "histogram MACD belum membaik"
-                )
-
+                reasons.append("histogram MACD belum membaik")
             if not transaction_active:
-                reasons.append(
-                    f"transaksi hari ini lemah {value_ratio:.2f}x"
-                )
-
+                reasons.append(f"transaksi hari ini lemah {value_ratio:.2f}x")
             if not rebound_atr_ok:
-                reasons.append(
-                    f"ATR {atr_percent:.2f}% di luar batas"
-                )
-
+                reasons.append(f"ATR {atr_percent:.2f}% di luar batas")
             if not room_for_target_5:
-                reasons.append(
-                    f"ruang ke resistance hanya "
-                    f"{room_to_resistance:.2f}%"
-                )
-
+                reasons.append(f"ruang ke resistance hanya {room_to_resistance:.2f}%")
             if not np.isfinite(rebound_risk):
                 reasons.append("stop loss tidak valid")
-
             elif rebound_risk > 6:
-                reasons.append(
-                    f"risiko {rebound_risk:.2f}% terlalu besar"
-                )
-
+                reasons.append(f"risiko {rebound_risk:.2f}% terlalu besar")
             if rebound_rr < 1.2:
-                reasons.append(
-                    f"R:R target +5% rendah {rebound_rr:.2f}"
-                )
+                reasons.append(f"R:R target +5% rendah {rebound_rr:.2f}")
 
         if not reasons:
             reasons = ["syarat strategi belum lengkap"]
 
     max_lots, max_shares, position_value = calc_position_size(
-        entry=entry,
-        stop_loss=stop_loss,
-        capital=trading_capital,
+        entry=entry, stop_loss=stop_loss, capital=trading_capital,
         risk_percent_of_capital=risk_per_trade_percent,
     )
 
@@ -744,7 +544,6 @@ def analyze_stock(
         "Skor": int(round(score)),
         "Alasan": "; ".join(reasons),
         "Tanggal Data": df.index[-1].strftime("%Y-%m-%d"),
-
         "Harga Terakhir": safe_round(close, 0),
         "Entry": safe_round(entry, 0),
         "Stop Loss": safe_round(stop_loss, 0),
@@ -755,17 +554,12 @@ def analyze_stock(
         "Target 2R": safe_round(target_2r, 0),
         "Target 3R": safe_round(target_3r, 0),
         "R:R Target 5%": safe_round(reward_risk, 2),
-
         "Modal Trading": safe_round(trading_capital, 0),
         "Risk Modal %": safe_round(risk_per_trade_percent, 2),
-        "Risk Modal Rp": safe_round(
-            trading_capital * risk_per_trade_percent / 100,
-            0,
-        ),
+        "Risk Modal Rp": safe_round(trading_capital * risk_per_trade_percent / 100, 0),
         "Maksimal Lot": int(max_lots),
         "Maksimal Saham": int(max_shares),
         "Nilai Posisi Maks": safe_round(position_value, 0),
-
         "RSI 14": safe_round(row["rsi14"], 1),
         "RSI 14 Sebelum": safe_round(row["rsi14_prev"], 1),
         "EMA 5": safe_round(row["ema5"], 2),
@@ -778,30 +572,18 @@ def analyze_stock(
         "ADX 14": safe_round(row["adx14"], 1),
         "+DI": safe_round(row["adx_pos"], 1),
         "-DI": safe_round(row["adx_neg"], 1),
-
         "Volume Ratio": safe_round(volume_ratio, 2),
         "Nilai Transaksi Hari Ini": safe_round(value_today, 0),
         "Nilai Transaksi 20H": safe_round(value_sma20, 0),
         "Rasio Nilai Transaksi": safe_round(value_ratio, 2),
         "ATR 14": safe_round(atr_value, 2),
         "ATR %": safe_round(atr_percent, 2),
-
         "Return 5H %": safe_round(row["return_5d"], 2),
-        "Turun dari High 20H %": safe_round(
-            row["drawdown_20d"],
-            2,
-        ),
-        "High 20H Sebelumnya": safe_round(
-            row["high20_previous"],
-            0,
-        ),
+        "Turun dari High 20H %": safe_round(row["drawdown_20d"], 2),
+        "High 20H Sebelumnya": safe_round(row["high20_previous"], 0),
         "Low 10H": safe_round(row["low10"], 0),
         "Resistance 60H": safe_round(resistance_60, 0),
-        "Ruang ke Resistance %": safe_round(
-            room_to_resistance,
-            2,
-        ),
-
+        "Ruang ke Resistance %": safe_round(room_to_resistance, 2),
         "Likuid": bool(liquid),
         "Transaksi Aktif": bool(transaction_active),
         "Harga Valid": bool(price_valid),
@@ -814,61 +596,6 @@ def analyze_stock(
         "ADX Trending": bool(adx_trending),
         "ATR Sesuai": bool(atr_suitable),
         "Ruang Target +5%": bool(room_for_target_5),
-    }
-
-
-# ============================================================
-# BROKER SUMMARY / BANDARMOLOGY
-# ============================================================
-
-@st.cache_data(ttl=3600, show_spinner=False)
-def load_broker_summary(file):
-    df = pd.read_csv(file)
-    df["kode"] = df["kode"].astype(str).str.upper().str.strip()
-    df["broker"] = df["broker"].astype(str).str.upper().str.strip()
-    df["net_lot"] = df["buy_lot"] - df["sell_lot"]
-    return df
-
-
-def hitung_skor_bandarmology(df_broker, kode, n_broker=5):
-    sub = df_broker[df_broker["kode"] == kode].copy()
-    if sub.empty:
-        return None
-
-    total_buy = sub["buy_lot"].sum()
-    total_sell = sub["sell_lot"].sum()
-
-    top_buyers = sub.sort_values("net_lot", ascending=False).head(n_broker)
-    top_sellers = sub.sort_values("net_lot", ascending=True).head(n_broker)
-
-    top_buy_lot = top_buyers.loc[top_buyers["net_lot"] > 0, "buy_lot"].sum()
-    top_sell_lot = top_sellers.loc[top_sellers["net_lot"] < 0, "sell_lot"].sum()
-
-    rasio_konsentrasi_buy = (top_buy_lot / total_buy * 100) if total_buy > 0 else 0.0
-    rasio_konsentrasi_sell = (top_sell_lot / total_sell * 100) if total_sell > 0 else 0.0
-
-    net_lot_total = sub["net_lot"].sum()
-    skor_bandar = round(rasio_konsentrasi_buy - rasio_konsentrasi_sell, 1)
-
-    if rasio_konsentrasi_buy >= 60 and rasio_konsentrasi_sell < 30:
-        label = "Akumulasi Kuat"
-    elif rasio_konsentrasi_sell >= 60 and rasio_konsentrasi_buy < 30:
-        label = "Distribusi Kuat"
-    elif net_lot_total > 0:
-        label = "Akumulasi Lemah"
-    elif net_lot_total < 0:
-        label = "Distribusi Lemah"
-    else:
-        label = "Netral"
-
-    return {
-        "skor_bandar": skor_bandar,
-        "label": label,
-        "net_lot_total": int(net_lot_total),
-        "rasio_konsentrasi_buy": round(rasio_konsentrasi_buy, 1),
-        "rasio_konsentrasi_sell": round(rasio_konsentrasi_sell, 1),
-        "top_buyers": top_buyers[["broker", "net_lot", "buy_avg"]].reset_index(drop=True),
-        "top_sellers": top_sellers[["broker", "net_lot", "sell_avg"]].reset_index(drop=True),
     }
 
 
@@ -897,97 +624,48 @@ with st.sidebar:
 
     strategy_filter = st.radio(
         "Strategi yang dicari",
-        [
-            "Gabungan: Momentum + Rebound",
-            "Momentum / Breakout",
-            "Rebound dari bawah",
-        ],
+        ["Gabungan: Momentum + Rebound", "Momentum / Breakout", "Rebound dari bawah"],
         index=0,
     )
 
-    period = st.selectbox(
-        "Periode data",
-        ["1y", "2y", "5y"],
-        index=1,
-    )
+    period = st.selectbox("Periode data", ["1y", "2y", "5y"], index=1)
 
     min_value_billion = st.number_input(
         "Minimal nilai transaksi rata-rata 20 hari (Rp miliar)",
-        min_value=0.0,
-        value=5.0,
-        step=1.0,
-        help=(
-            "Untuk saham lapis, Rp3-5 miliar adalah minimum longgar. "
-            "Rp5-10 miliar lebih nyaman untuk swing. "
-            "Nilai besar tidak menggantikan pemeriksaan order book."
-        ),
+        min_value=0.0, value=5.0, step=1.0,
     )
 
-    min_price = st.number_input(
-        "Harga saham minimum (Rp)",
-        min_value=50,
-        value=50,
-        step=10,
-    )
+    min_price = st.number_input("Harga saham minimum (Rp)", min_value=50, value=50, step=10)
 
     atr_max_percent = st.slider(
-        "ATR% maksimum",
-        min_value=3.0,
-        max_value=12.0,
-        value=8.0,
-        step=0.5,
-        help=(
-            "Untuk saham lapis yang agresif gunakan sekitar 8%. "
-            "ATR tinggi berarti lot harus lebih kecil."
-        ),
+        "ATR% maksimum", min_value=3.0, max_value=12.0, value=8.0, step=0.5,
     )
 
     trading_capital = st.number_input(
-        "Modal trading (Rp)",
-        min_value=100_000,
-        value=10_000_000,
-        step=500_000,
+        "Modal trading (Rp)", min_value=100_000, value=10_000_000, step=500_000,
     )
 
     risk_per_trade_percent = st.slider(
         "Risiko maksimal per transaksi (% dari modal)",
-        min_value=0.25,
-        max_value=3.00,
-        value=1.00,
-        step=0.25,
+        min_value=0.25, max_value=3.00, value=1.00, step=0.25,
     )
 
     candidate_limit = st.slider(
         "Maksimal kandidat BELI/BELI KUAT utama",
-        min_value=10,
-        max_value=15,
-        value=15,
-        step=1,
-        help=(
-            "Hanya membatasi tabel kandidat utama. "
-            "Tabel lengkap dan CSV tetap menampilkan seluruh saham."
-        ),
+        min_value=10, max_value=15, value=15, step=1,
     )
 
     max_tickers = st.number_input(
         "Maksimum ticker diproses per sekali scan",
-        min_value=50,
-        max_value=1000,
-        value=750,
-        step=50,
+        min_value=50, max_value=1000, value=750, step=50,
     )
 
     ticker_text = st.text_area(
         "Ticker pilihan (gunakan bila memilih mode Ticker pilihan)",
-        value="BBCA BBRI BMRI TLKM ANTM",
-        height=120,
+        value="BBCA BBRI BMRI TLKM ANTM", height=120,
     )
 
-    run_screening = st.button(
-        "Jalankan Screener",
-        type="primary",
-        use_container_width=True,
-    )
+    run_screening = st.button("Jalankan Screener", type="primary", use_container_width=True)
 
 st.info(
     f"Daftar aplikasi berisi {len(all_tickers)} ticker BEI. "
@@ -997,18 +675,13 @@ st.info(
 
 if not run_screening:
     st.subheader("Cara menggunakan")
-
     st.markdown(
-        "1. Atur nilai transaksi minimal; untuk saham lapis mulai dari "
-        "**Rp5 miliar**.  \n"
-        "2. Tetapkan modal dan risiko transaksi, misalnya modal "
-        "**Rp10 juta** dan risiko **1%**.  \n"
+        "1. Atur nilai transaksi minimal; untuk saham lapis mulai dari **Rp5 miliar**.  \n"
+        "2. Tetapkan modal dan risiko transaksi, misalnya modal **Rp10 juta** dan risiko **1%**.  \n"
         "3. Tekan **Jalankan Screener** setelah pasar tutup.  \n"
-        "4. Fokus pada maksimal **10-15** kandidat status "
-        "**BELI KUAT** atau **BELI**.  \n"
+        "4. Fokus pada maksimal **10-15** kandidat status **BELI KUAT** atau **BELI**.  \n"
         "5. Sebelum entry, cek chart dan order book di aplikasi broker."
     )
-
     st.stop()
 
 
@@ -1017,30 +690,18 @@ if not run_screening:
 # ============================================================
 
 if scan_mode == "Semua saham BEI":
-    tickers = all_tickers["ticker"].head(
-        int(max_tickers)
-    ).tolist()
-
+    tickers = all_tickers["ticker"].head(int(max_tickers)).tolist()
 else:
-    raw_tickers = (
-        ticker_text.replace(",", " ")
-        .replace("\n", " ")
-        .split()
-    )
-
+    raw_tickers = ticker_text.replace(",", " ").replace("\n", " ").split()
     tickers = []
-
     for ticker in raw_tickers:
         ticker = ticker.strip().upper()
-
         if not ticker:
             continue
-
         if ticker.endswith(".JK"):
             tickers.append(ticker)
         else:
             tickers.append(f"{ticker}.JK")
-
     tickers = list(dict.fromkeys(tickers))
 
 if not tickers:
@@ -1057,50 +718,30 @@ minimum_value = min_value_billion * 1_000_000_000
 results = []
 failed = []
 
-progress_bar = st.progress(
-    0,
-    text="Menyiapkan screening...",
-)
+progress_bar = st.progress(0, text="Menyiapkan screening...")
 
 for index, ticker in enumerate(tickers, start=1):
     try:
-        price_data = download_price_data_with_retry(
-            ticker,
-            period,
-        )
-
+        price_data = download_price_data_with_retry(ticker, period)
         result = analyze_stock(
-            ticker=ticker,
-            data=price_data,
-            min_value_traded=minimum_value,
-            trading_capital=trading_capital,
-            risk_per_trade_percent=risk_per_trade_percent,
-            min_price=min_price,
-            atr_max_percent=atr_max_percent,
+            ticker=ticker, data=price_data, min_value_traded=minimum_value,
+            trading_capital=trading_capital, risk_per_trade_percent=risk_per_trade_percent,
+            min_price=min_price, atr_max_percent=atr_max_percent,
         )
-
         if result is not None:
             results.append(result)
         else:
             failed.append(ticker)
-
     except Exception:
         failed.append(ticker)
 
-    progress_bar.progress(
-        index / len(tickers),
-        text=f"Memproses {index}/{len(tickers)}: {ticker}",
-    )
-
+    progress_bar.progress(index / len(tickers), text=f"Memproses {index}/{len(tickers)}: {ticker}")
     time.sleep(0.15)
 
 progress_bar.empty()
 
 if not results:
-    st.error(
-        "Data tidak berhasil diproses. "
-        "Coba lagi, kurangi jumlah ticker, atau gunakan Ticker pilihan."
-    )
+    st.error("Data tidak berhasil diproses. Coba lagi, kurangi jumlah ticker, atau gunakan Ticker pilihan.")
     st.stop()
 
 
@@ -1112,45 +753,17 @@ all_result_df = pd.DataFrame(results)
 
 if strategy_filter == "Momentum / Breakout":
     all_result_df = all_result_df[
-        all_result_df["Strategi"].isin(
-            [
-                "Momentum / Breakout",
-                "Momentum belum lengkap",
-                "Momentum tidak valid",
-            ]
-        )
+        all_result_df["Strategi"].isin(["Momentum / Breakout", "Momentum belum lengkap", "Momentum tidak valid"])
     ].copy()
-
 elif strategy_filter == "Rebound dari bawah":
     all_result_df = all_result_df[
-        all_result_df["Strategi"].isin(
-            [
-                "Rebound dari bawah",
-                "Rebound belum lengkap",
-                "Rebound tidak valid",
-            ]
-        )
+        all_result_df["Strategi"].isin(["Rebound dari bawah", "Rebound belum lengkap", "Rebound tidak valid"])
     ].copy()
 
-status_order = {
-    "BELI KUAT - MOMENTUM": 0,
-    "BELI KUAT - REBOUND": 1,
-    "BELI": 2,
-    "TIDAK LAYAK": 3,
-}
-
-all_result_df["_status_order"] = all_result_df[
-    "Status"
-].map(status_order)
-
+status_order = {"BELI KUAT - MOMENTUM": 0, "BELI KUAT - REBOUND": 1, "BELI": 2, "TIDAK LAYAK": 3}
+all_result_df["_status_order"] = all_result_df["Status"].map(status_order)
 all_result_df = all_result_df.sort_values(
-    by=[
-        "_status_order",
-        "Skor",
-        "R:R Target 5%",
-        "Volume Ratio",
-        "Nilai Transaksi 20H",
-    ],
+    by=["_status_order", "Skor", "R:R Target 5%", "Volume Ratio", "Nilai Transaksi 20H"],
     ascending=[True, False, False, False, False],
 ).drop(columns="_status_order")
 
@@ -1159,24 +772,12 @@ all_result_df = all_result_df.sort_values(
 # METRIK HASIL PENUH
 # ============================================================
 
-strong_momentum = all_result_df[
-    all_result_df["Status"] == "BELI KUAT - MOMENTUM"
-]
-
-strong_rebound = all_result_df[
-    all_result_df["Status"] == "BELI KUAT - REBOUND"
-]
-
-buy = all_result_df[
-    all_result_df["Status"] == "BELI"
-]
-
-not_eligible = all_result_df[
-    all_result_df["Status"] == "TIDAK LAYAK"
-]
+strong_momentum = all_result_df[all_result_df["Status"] == "BELI KUAT - MOMENTUM"]
+strong_rebound = all_result_df[all_result_df["Status"] == "BELI KUAT - REBOUND"]
+buy = all_result_df[all_result_df["Status"] == "BELI"]
+not_eligible = all_result_df[all_result_df["Status"] == "TIDAK LAYAK"]
 
 c1, c2, c3, c4, c5 = st.columns(5)
-
 c1.metric("Saham Dianalisis", len(all_result_df))
 c2.metric("BELI KUAT Momentum", len(strong_momentum))
 c3.metric("BELI KUAT Rebound", len(strong_rebound))
@@ -1188,60 +789,29 @@ c5.metric("Tidak Layak", len(not_eligible))
 # 10-15 KANDIDAT UTAMA SAJA
 # ============================================================
 
-st.subheader(
-    f"Top {candidate_limit} Kandidat BELI KUAT dan BELI"
-)
+st.subheader(f"Top {candidate_limit} Kandidat BELI KUAT dan BELI")
 
 candidates_df = all_result_df[
-    all_result_df["Status"].isin(
-        [
-            "BELI KUAT - MOMENTUM",
-            "BELI KUAT - REBOUND",
-            "BELI",
-        ]
-    )
+    all_result_df["Status"].isin(["BELI KUAT - MOMENTUM", "BELI KUAT - REBOUND", "BELI"])
 ].copy()
 
 candidate_columns = [
-    "Kode",
-    "Status",
-    "Strategi",
-    "Skor",
-    "Harga Terakhir",
-    "Entry",
-    "Stop Loss",
-    "Risk %",
-    "Target 1R",
-    "Target 2R",
-    "Target +5%",
-    "Target +10%",
-    "R:R Target 5%",
-    "Maksimal Lot",
-    "Nilai Posisi Maks",
-    "RSI 14",
-    "ADX 14",
-    "Volume Ratio",
-    "ATR %",
-    "Nilai Transaksi 20H",
-    "Alasan",
+    "Kode", "Status", "Strategi", "Skor", "Harga Terakhir", "Entry", "Stop Loss",
+    "Risk %", "Target 1R", "Target 2R", "Target +5%", "Target +10%", "R:R Target 5%",
+    "Maksimal Lot", "Nilai Posisi Maks", "RSI 14", "ADX 14", "Volume Ratio", "ATR %",
+    "Nilai Transaksi 20H", "Alasan",
 ]
 
 if candidates_df.empty:
     st.warning(
         "Belum ada kandidat BELI KUAT atau BELI yang lolos. "
-        "Jangan memaksa entry; periksa lagi setelah penutupan pasar "
-        "berikutnya."
+        "Jangan memaksa entry; periksa lagi setelah penutupan pasar berikutnya."
     )
-
 else:
     st.dataframe(
-        candidates_df.head(int(candidate_limit))[
-            candidate_columns
-        ],
-        use_container_width=True,
-        hide_index=True,
+        candidates_df.head(int(candidate_limit))[candidate_columns],
+        use_container_width=True, hide_index=True,
     )
-
     st.caption(
         "Maksimal lot dihitung dari modal dan risk per transaksi Anda. "
         "Tetap cek order book, spread bid-ask, dan chart sebelum entry."
@@ -1249,137 +819,41 @@ else:
 
 
 # ============================================================
-# KONFIRMASI BANDARMOLOGY (BROKER SUMMARY) UNTUK KANDIDAT
+# CEK CEPAT BROKER SUMMARY VIA STOCKBIT (TANPA UPLOAD)
 # ============================================================
 
-st.subheader("Konfirmasi Bandarmology untuk Kandidat")
+st.subheader("Cek Cepat Broker Summary per Kandidat")
 
 st.caption(
-    "Cek broker summary hanya untuk kandidat di tabel Top di atas -- "
-    "bukan seluruh saham hasil scan -- karena data ini umumnya "
-    "diinput manual/di-export harian dari aplikasi broker Anda."
+    "Klik link untuk membuka halaman saham di Stockbit -- scroll ke bagian "
+    "Broker Summary / Bandar Detector di sana."
 )
 
-broker_file = st.file_uploader(
-    "Upload broker summary harian (CSV: kode, broker, buy_lot, sell_lot, buy_avg, sell_avg)",
-    type=["csv"],
-    key="broker_summary_upload",
-)
+if not candidates_df.empty:
+    link_rows = []
+    for _, row in candidates_df.head(int(candidate_limit)).iterrows():
+        kode = row["Kode"]
+        stockbit_url = f"https://stockbit.com/symbol/{kode}"
+        link_rows.append({
+            "Kode": kode,
+            "Status": row["Status"],
+            "Skor": row["Skor"],
+            "Link Stockbit": stockbit_url,
+        })
 
-if broker_file is not None and not candidates_df.empty:
-    df_broker = load_broker_summary(broker_file)
+    link_df = pd.DataFrame(link_rows)
 
-    kandidat_list = candidates_df.head(int(candidate_limit))["Kode"].tolist()
-
-    ringkasan_bandar = []
-
-    for kode in kandidat_list:
-        row_kandidat = candidates_df[candidates_df["Kode"] == kode].iloc[0]
-        hasil_bandar = hitung_skor_bandarmology(df_broker, kode)
-
-        with st.expander(
-            f"{kode} | {row_kandidat['Status']} | Skor Teknikal: {row_kandidat['Skor']}"
-        ):
-            col_chart, col_broker = st.columns([1, 1])
-
-            with col_chart:
-                st.markdown("**Chart Teknikal (EMA 10/20/50)**")
-
-                ticker_jk = f"{kode}.JK"
-                price_data = download_price_data_with_retry(ticker_jk, period)
-
-                if not price_data.empty:
-                    df_plot = add_indicators(price_data).tail(90)
-
-                    fig = go.Figure(data=[go.Candlestick(
-                        x=df_plot.index,
-                        open=df_plot["Open"],
-                        high=df_plot["High"],
-                        low=df_plot["Low"],
-                        close=df_plot["Close"],
-                        name=kode,
-                    )])
-                    fig.add_scatter(
-                        x=df_plot.index, y=df_plot["ema10"],
-                        mode="lines", name="EMA10", line=dict(width=1),
-                    )
-                    fig.add_scatter(
-                        x=df_plot.index, y=df_plot["ema20"],
-                        mode="lines", name="EMA20", line=dict(width=1),
-                    )
-                    fig.add_scatter(
-                        x=df_plot.index, y=df_plot["ema50"],
-                        mode="lines", name="EMA50", line=dict(width=1),
-                    )
-                    fig.update_layout(
-                        height=380,
-                        margin=dict(l=0, r=0, t=20, b=0),
-                        xaxis_rangeslider_visible=False,
-                        legend=dict(orientation="h", y=1.05),
-                    )
-                    st.plotly_chart(fig, use_container_width=True)
-                else:
-                    st.warning("Data harga tidak tersedia untuk chart.")
-
-            with col_broker:
-                st.markdown("**Broker Summary**")
-
-                if hasil_bandar is None:
-                    st.warning(f"Data broker untuk {kode} tidak ditemukan di file yang diupload.")
-                    skor_bandar_val = 0
-                else:
-                    label = hasil_bandar["label"]
-                    if "Akumulasi Kuat" in label:
-                        st.success(f"{label} (skor: {hasil_bandar['skor_bandar']})")
-                    elif "Distribusi" in label:
-                        st.error(f"{label} (skor: {hasil_bandar['skor_bandar']})")
-                    else:
-                        st.info(f"{label} (skor: {hasil_bandar['skor_bandar']})")
-
-                    m1, m2 = st.columns(2)
-                    m1.metric("Konsentrasi Net Buy Top5", f"{hasil_bandar['rasio_konsentrasi_buy']}%")
-                    m2.metric("Konsentrasi Net Sell Top5", f"{hasil_bandar['rasio_konsentrasi_sell']}%")
-
-                    st.write("Top Net Buyer")
-                    st.dataframe(hasil_bandar["top_buyers"], hide_index=True, height=170)
-
-                    st.write("Top Net Seller")
-                    st.dataframe(hasil_bandar["top_sellers"], hide_index=True, height=170)
-
-                    skor_bandar_val = hasil_bandar["skor_bandar"]
-
-            skor_teknikal = row_kandidat["Skor"]
-            skor_gabungan = skor_teknikal + skor_bandar_val * 0.3
-
-            if skor_gabungan >= skor_teknikal * 1.1 and skor_bandar_val > 0:
-                st.success(
-                    f"Sinyal SEARAH: teknikal ({skor_teknikal}) didukung aliran dana bandar "
-                    f"(skor gabungan estimasi {skor_gabungan:.0f}). Layak dipertimbangkan untuk entry."
-                )
-            elif skor_bandar_val < 0:
-                st.error(
-                    f"Sinyal BERTOLAK BELAKANG: teknikal bagus ({skor_teknikal}) tapi broker "
-                    f"summary menunjukkan distribusi. Pertimbangkan tunggu konfirmasi lebih lanjut."
-                )
-            else:
-                st.info(
-                    f"Sinyal NETRAL/BELUM JELAS dari sisi bandarmology. "
-                    f"Tetap gunakan disiplin stop loss Rp{row_kandidat['Stop Loss']:.0f} bila entry."
-                )
-
-            ringkasan_bandar.append({
-                "Kode": kode,
-                "Skor Teknikal": skor_teknikal,
-                "Skor Bandar": skor_bandar_val,
-                "Label Bandar": hasil_bandar["label"] if hasil_bandar else "Data tidak ada",
-            })
-
-    if ringkasan_bandar:
-        st.markdown("**Ringkasan Konfirmasi Semua Kandidat**")
-        st.dataframe(pd.DataFrame(ringkasan_bandar), hide_index=True, use_container_width=True)
-
-elif broker_file is None:
-    st.info("Upload file broker summary untuk mengaktifkan konfirmasi bandarmology pada kandidat di atas.")
+    st.dataframe(
+        link_df,
+        column_config={
+            "Link Stockbit": st.column_config.LinkColumn(
+                "Broker Summary", display_text="Buka di Stockbit",
+            )
+        },
+        hide_index=True, use_container_width=True,
+    )
+else:
+    st.info("Belum ada kandidat untuk ditampilkan link broker summary-nya.")
 
 
 # ============================================================
@@ -1390,55 +864,24 @@ st.subheader("Semua Hasil dan Indikator")
 
 selected_status = st.multiselect(
     "Status yang ditampilkan",
-    [
-        "BELI KUAT - MOMENTUM",
-        "BELI KUAT - REBOUND",
-        "BELI",
-        "TIDAK LAYAK",
-    ],
-    default=[
-        "BELI KUAT - MOMENTUM",
-        "BELI KUAT - REBOUND",
-        "BELI",
-        "TIDAK LAYAK",
-    ],
+    ["BELI KUAT - MOMENTUM", "BELI KUAT - REBOUND", "BELI", "TIDAK LAYAK"],
+    default=["BELI KUAT - MOMENTUM", "BELI KUAT - REBOUND", "BELI", "TIDAK LAYAK"],
 )
 
-display_df = all_result_df[
-    all_result_df["Status"].isin(selected_status)
-].copy()
+display_df = all_result_df[all_result_df["Status"].isin(selected_status)].copy()
 
 summary_columns = [
-    "Kode",
-    "Status",
-    "Strategi",
-    "Skor",
-    "Harga Terakhir",
-    "Entry",
-    "Stop Loss",
-    "Risk %",
-    "R:R Target 5%",
-    "RSI 14",
-    "ADX 14",
-    "Volume Ratio",
-    "ATR %",
-    "Nilai Transaksi 20H",
-    "Rasio Nilai Transaksi",
-    "Ruang ke Resistance %",
-    "Alasan",
+    "Kode", "Status", "Strategi", "Skor", "Harga Terakhir", "Entry", "Stop Loss",
+    "Risk %", "R:R Target 5%", "RSI 14", "ADX 14", "Volume Ratio", "ATR %",
+    "Nilai Transaksi 20H", "Rasio Nilai Transaksi", "Ruang ke Resistance %", "Alasan",
 ]
 
 st.caption(
     f"Menampilkan {len(display_df)} saham. "
-    "Saham TIDAK LAYAK tetap tampil agar indikator dan alasannya "
-    "bisa dipelajari."
+    "Saham TIDAK LAYAK tetap tampil agar indikator dan alasannya bisa dipelajari."
 )
 
-st.dataframe(
-    display_df[summary_columns],
-    use_container_width=True,
-    hide_index=True,
-)
+st.dataframe(display_df[summary_columns], use_container_width=True, hide_index=True)
 
 
 # ============================================================
@@ -1446,75 +889,21 @@ st.dataframe(
 # ============================================================
 
 detail_columns = [
-    "Kode",
-    "Status",
-    "Strategi",
-    "Skor",
-    "Tanggal Data",
-    "Harga Terakhir",
-    "Entry",
-    "Stop Loss",
-    "Risk %",
-    "Target +5%",
-    "Target +10%",
-    "Target 1R",
-    "Target 2R",
-    "Target 3R",
-    "R:R Target 5%",
-    "Modal Trading",
-    "Risk Modal %",
-    "Risk Modal Rp",
-    "Maksimal Lot",
-    "Maksimal Saham",
-    "Nilai Posisi Maks",
-    "RSI 14",
-    "RSI 14 Sebelum",
-    "EMA 5",
-    "EMA 10",
-    "EMA 20",
-    "EMA 50",
-    "MACD",
-    "MACD Signal",
-    "MACD Hist",
-    "ADX 14",
-    "+DI",
-    "-DI",
-    "Volume Ratio",
-    "Nilai Transaksi Hari Ini",
-    "Nilai Transaksi 20H",
-    "Rasio Nilai Transaksi",
-    "ATR 14",
-    "ATR %",
-    "Return 5H %",
-    "Turun dari High 20H %",
-    "High 20H Sebelumnya",
-    "Low 10H",
-    "Resistance 60H",
-    "Ruang ke Resistance %",
-    "Likuid",
-    "Transaksi Aktif",
-    "Harga Valid",
-    "Trend Bullish",
-    "EMA Momentum",
-    "Breakout 20H",
-    "Volume Kuat",
-    "RSI Sehat",
-    "MACD Bullish",
-    "ADX Trending",
-    "ATR Sesuai",
-    "Ruang Target +5%",
-    "Alasan",
+    "Kode", "Status", "Strategi", "Skor", "Tanggal Data", "Harga Terakhir", "Entry",
+    "Stop Loss", "Risk %", "Target +5%", "Target +10%", "Target 1R", "Target 2R",
+    "Target 3R", "R:R Target 5%", "Modal Trading", "Risk Modal %", "Risk Modal Rp",
+    "Maksimal Lot", "Maksimal Saham", "Nilai Posisi Maks", "RSI 14", "RSI 14 Sebelum",
+    "EMA 5", "EMA 10", "EMA 20", "EMA 50", "MACD", "MACD Signal", "MACD Hist",
+    "ADX 14", "+DI", "-DI", "Volume Ratio", "Nilai Transaksi Hari Ini",
+    "Nilai Transaksi 20H", "Rasio Nilai Transaksi", "ATR 14", "ATR %", "Return 5H %",
+    "Turun dari High 20H %", "High 20H Sebelumnya", "Low 10H", "Resistance 60H",
+    "Ruang ke Resistance %", "Likuid", "Transaksi Aktif", "Harga Valid", "Trend Bullish",
+    "EMA Momentum", "Breakout 20H", "Volume Kuat", "RSI Sehat", "MACD Bullish",
+    "ADX Trending", "ATR Sesuai", "Ruang Target +5%", "Alasan",
 ]
 
-with st.expander(
-    "Lihat seluruh indikator untuk semua saham",
-    expanded=False,
-):
-    st.dataframe(
-        display_df[detail_columns],
-        use_container_width=True,
-        hide_index=True,
-    )
+with st.expander("Lihat seluruh indikator untuk semua saham", expanded=False):
+    st.dataframe(display_df[detail_columns], use_container_width=True, hide_index=True)
 
 
 # ============================================================
@@ -1523,13 +912,8 @@ with st.expander(
 
 st.download_button(
     "Unduh seluruh hasil CSV",
-    data=all_result_df.to_csv(
-        index=False
-    ).encode("utf-8-sig"),
-    file_name=(
-        f"hasil_idx_screener_"
-        f"{date.today().isoformat()}.csv"
-    ),
+    data=all_result_df.to_csv(index=False).encode("utf-8-sig"),
+    file_name=f"hasil_idx_screener_{date.today().isoformat()}.csv",
     mime="text/csv",
 )
 
@@ -1546,21 +930,15 @@ if failed:
 # ============================================================
 
 st.divider()
-
 st.subheader("Aturan penggunaan")
 
 st.markdown(
     "- Prioritaskan maksimal **10-15 kandidat** pada tabel utama.  \n"
-    "- Status **BELI KUAT** adalah prioritas; status **BELI** perlu "
-    "konfirmasi lebih ketat.  \n"
-    "- Status **TIDAK LAYAK** bukan berarti saham buruk selamanya; "
-    "baca kolom **Alasan** untuk mengetahui syarat yang belum terpenuhi.  \n"
-    "- Gunakan kolom **Maksimal Lot**, bukan membeli jumlah lot sama "
-    "pada setiap saham.  \n"
-    "- Stop loss adalah batas risiko: jika levelnya tersentuh, "
-    "jalankan rencana exit sesuai gaya trading Anda.  \n"
-    "- Sebelum entry, cek order book secara manual di aplikasi broker: "
-    "spread bid-ask, ketebalan bid, offer di atas harga entry, "
-    "dan aktivitas transaksi hari itu.  \n"
+    "- Status **BELI KUAT** adalah prioritas; status **BELI** perlu konfirmasi lebih ketat.  \n"
+    "- Status **TIDAK LAYAK** bukan berarti saham buruk selamanya; baca kolom **Alasan**.  \n"
+    "- Gunakan kolom **Maksimal Lot**, bukan membeli jumlah lot sama pada setiap saham.  \n"
+    "- Stop loss adalah batas risiko: jika levelnya tersentuh, jalankan rencana exit Anda.  \n"
+    "- Sebelum entry, cek order book secara manual di aplikasi broker.  \n"
+    "- Cek Broker Summary di Stockbit untuk konfirmasi tambahan sebelum entry.  \n"
     "- Screener adalah alat penyaring teknikal, bukan jaminan harga naik."
 )
