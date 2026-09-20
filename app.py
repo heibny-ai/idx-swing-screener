@@ -787,6 +787,8 @@ c5.metric("Tidak Layak", len(not_eligible))
 
 # ============================================================
 # 10-15 KANDIDAT UTAMA SAJA
+# Urutan kolom: Skor -> Strategi -> ADX -> RSI -> Volume Ratio -> ATR% ->
+# Risk% -> R:R -> Nilai Transaksi 20H -> data eksekusi
 # ============================================================
 
 st.subheader(f"Top {candidate_limit} Kandidat BELI KUAT dan BELI")
@@ -796,10 +798,12 @@ candidates_df = all_result_df[
 ].copy()
 
 candidate_columns = [
-    "Kode", "Status", "Strategi", "Skor", "Harga Terakhir", "Entry", "Stop Loss",
-    "Risk %", "Target 1R", "Target 2R", "Target +5%", "Target +10%", "R:R Target 5%",
-    "Maksimal Lot", "Nilai Posisi Maks", "RSI 14", "ADX 14", "Volume Ratio", "ATR %",
-    "Nilai Transaksi 20H", "Alasan",
+    "Kode", "Status", "Skor", "Strategi",
+    "ADX 14", "RSI 14", "Volume Ratio", "ATR %",
+    "Risk %", "R:R Target 5%", "Nilai Transaksi 20H",
+    "Harga Terakhir", "Entry", "Stop Loss",
+    "Target 1R", "Target 2R", "Target +5%", "Target +10%",
+    "Maksimal Lot", "Nilai Posisi Maks", "Alasan",
 ]
 
 if candidates_df.empty:
@@ -871,9 +875,11 @@ selected_status = st.multiselect(
 display_df = all_result_df[all_result_df["Status"].isin(selected_status)].copy()
 
 summary_columns = [
-    "Kode", "Status", "Strategi", "Skor", "Harga Terakhir", "Entry", "Stop Loss",
-    "Risk %", "R:R Target 5%", "RSI 14", "ADX 14", "Volume Ratio", "ATR %",
-    "Nilai Transaksi 20H", "Rasio Nilai Transaksi", "Ruang ke Resistance %", "Alasan",
+    "Kode", "Status", "Skor", "Strategi",
+    "ADX 14", "RSI 14", "Volume Ratio", "ATR %",
+    "Risk %", "R:R Target 5%", "Ruang ke Resistance %", "Nilai Transaksi 20H",
+    "Harga Terakhir", "Entry", "Stop Loss",
+    "Rasio Nilai Transaksi", "Alasan",
 ]
 
 st.caption(
@@ -889,17 +895,21 @@ st.dataframe(display_df[summary_columns], use_container_width=True, hide_index=T
 # ============================================================
 
 detail_columns = [
-    "Kode", "Status", "Strategi", "Skor", "Tanggal Data", "Harga Terakhir", "Entry",
-    "Stop Loss", "Risk %", "Target +5%", "Target +10%", "Target 1R", "Target 2R",
-    "Target 3R", "R:R Target 5%", "Modal Trading", "Risk Modal %", "Risk Modal Rp",
-    "Maksimal Lot", "Maksimal Saham", "Nilai Posisi Maks", "RSI 14", "RSI 14 Sebelum",
-    "EMA 5", "EMA 10", "EMA 20", "EMA 50", "MACD", "MACD Signal", "MACD Hist",
-    "ADX 14", "+DI", "-DI", "Volume Ratio", "Nilai Transaksi Hari Ini",
-    "Nilai Transaksi 20H", "Rasio Nilai Transaksi", "ATR 14", "ATR %", "Return 5H %",
-    "Turun dari High 20H %", "High 20H Sebelumnya", "Low 10H", "Resistance 60H",
-    "Ruang ke Resistance %", "Likuid", "Transaksi Aktif", "Harga Valid", "Trend Bullish",
-    "EMA Momentum", "Breakout 20H", "Volume Kuat", "RSI Sehat", "MACD Bullish",
-    "ADX Trending", "ATR Sesuai", "Ruang Target +5%", "Alasan",
+    "Kode", "Status", "Skor", "Strategi",
+    "ADX 14", "RSI 14", "Volume Ratio", "ATR %",
+    "Risk %", "R:R Target 5%", "Ruang ke Resistance %", "Nilai Transaksi 20H",
+    "Tanggal Data", "Harga Terakhir", "Entry", "Stop Loss",
+    "Target +5%", "Target +10%", "Target 1R", "Target 2R", "Target 3R",
+    "Modal Trading", "Risk Modal %", "Risk Modal Rp",
+    "Maksimal Lot", "Maksimal Saham", "Nilai Posisi Maks",
+    "RSI 14 Sebelum", "EMA 5", "EMA 10", "EMA 20", "EMA 50",
+    "MACD", "MACD Signal", "MACD Hist", "+DI", "-DI",
+    "Nilai Transaksi Hari Ini", "Rasio Nilai Transaksi", "ATR 14",
+    "Return 5H %", "Turun dari High 20H %", "High 20H Sebelumnya",
+    "Low 10H", "Resistance 60H",
+    "Likuid", "Transaksi Aktif", "Harga Valid", "Trend Bullish",
+    "EMA Momentum", "Breakout 20H", "Volume Kuat", "RSI Sehat",
+    "MACD Bullish", "ADX Trending", "ATR Sesuai", "Ruang Target +5%", "Alasan",
 ]
 
 with st.expander("Lihat seluruh indikator untuk semua saham", expanded=False):
